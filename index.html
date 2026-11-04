@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Emergency Blood Donor Finder</title>
+  <meta name="description" content="Emergency Blood Donor Finder System for Bangladesh: find the nearest eligible donor, send a donation proposal, arrange transport and record payment.">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="drop" aria-hidden="true"></span>
+      <div>
+        <strong>Blood Donor Finder</strong>
+        <small>Emergency donor matching, Bangladesh</small>
+      </div>
+    </div>
+    <button class="menu-btn" id="menuBtn" aria-label="Open menu" aria-expanded="false">Menu</button>
+  </header>
+
+  <nav class="sidenav" id="sidenav">
+    <a href="#dashboard" data-view="dashboard">Dashboard</a>
+    <p class="navgroup">Find blood</p>
+    <a href="#find" data-view="find">Find nearest donor</a>
+    <a href="#requests" data-view="requests">Blood requests</a>
+    <p class="navgroup">Donation</p>
+    <a href="#proposals" data-view="proposals">Proposals and pickup</a>
+    <a href="#transport" data-view="transport">Transportation</a>
+    <a href="#payments" data-view="payments">Payments</a>
+    <p class="navgroup">Records</p>
+    <a href="#donors" data-view="donors">Donors</a>
+    <a href="#medical" data-view="medical">Medical status</a>
+    <a href="#seekers" data-view="seekers">Blood seekers</a>
+    <a href="#tables" data-view="tables">Database tables</a>
+  </nav>
+
+  <main id="app" tabindex="-1"></main>
+
+  <dialog id="modal">
+    <form method="dialog" id="modalForm">
+      <div class="modal-head">
+        <h3 id="modalTitle"></h3>
+        <button type="button" class="icon-btn" id="modalClose" aria-label="Close">&times;</button>
+      </div>
+      <div id="modalBody"></div>
+      <div class="modal-foot">
+        <button type="button" class="btn ghost" id="modalCancel">Cancel</button>
+        <button type="submit" class="btn primary" id="modalOk">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
