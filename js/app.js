@@ -1,5 +1,5 @@
 /*
- * Emergency Blood Donor Finder System
+ * BLOOD FINDER (Emergency Blood Donor Finder System)
  * Front end for the System Analysis and Design project.
  * Processes follow the Level-1 DFD:
  *   3.1 Nearest donor tracking   3.2 Donor medical condition

@@ -1,4 +1,6 @@
-# Emergency Blood Donor Finder System
+# BLOOD FINDER
+
+*Emergency Blood Donor Finder System*
 
 A web interface for finding the nearest eligible blood donor in Bangladesh, sending a donation proposal, arranging transport for the donor and recording the transport payment.
 
