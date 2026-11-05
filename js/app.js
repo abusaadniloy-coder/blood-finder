@@ -9,7 +9,7 @@
 (function () {
   "use strict";
 
-  const STORE_KEY = "bdf-db-v1";
+  const STORE_KEY = "bdf-db-v2";
   const GROUPS = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
   const SETTINGS = {
     minGapDays: 120,
@@ -141,12 +141,31 @@
         `<optgroup label="${esc(div)} Division">${list.map(d =>
           `<option value="${esc(d)}"${d === sel ? " selected" : ""}>${esc(d)}</option>`).join("")}</optgroup>`).join("");
   }
-  function locationsInUse() {
-    const set = new Set();
-    db.Donor.forEach(d => set.add(d.current_location));
-    db.Blood_Seeker.forEach(s => set.add(s.location));
-    return [...set].sort();
+  // Upazila dropdown for one district: its upazilas, then city corporation areas where the district has them
+  function areaOpts(district, sel, placeholder) {
+    const g = (window.GEO || {})[district];
+    if (!g) return `<option value="">Select a district first</option>`;
+    const list = g.upazilas.concat(g.city || []);
+    const extra = sel && !list.includes(sel) ? `<option value="${esc(sel)}" selected>${esc(sel)}</option>` : "";
+    const o = l => `<option value="${esc(l)}"${l === sel ? " selected" : ""}>${esc(l)}</option>`;
+    return `<option value="">${esc(placeholder)}</option>${extra}` +
+      `<optgroup label="Upazilas of ${esc(district)}">${g.upazilas.map(o).join("")}</optgroup>` +
+      (g.city ? `<optgroup label="${esc(district)} city areas">${g.city.map(o).join("")}</optgroup>` : "");
   }
+  // A district select (data-district) and the upazila select next to it (data-area) inside the same container
+  function areaSelect(name, district, sel, placeholder, required) {
+    return `<select name="${name}" data-area data-placeholder="${esc(placeholder)}"${required ? " required" : ""}${(window.GEO || {})[district] ? "" : " disabled"}>${areaOpts(district, sel, placeholder)}</select>`;
+  }
+  function refreshArea(districtSel) {
+    const box = districtSel.closest("form, .toolbar");
+    const area = box && box.querySelector("select[data-area]");
+    if (!area) return;
+    area.innerHTML = areaOpts(districtSel.value, "", area.dataset.placeholder);
+    area.disabled = !(window.GEO || {})[districtSel.value];
+  }
+  document.addEventListener("change", e => {
+    if (e.target.matches("select[data-district]")) refreshArea(e.target);
+  });
 
   /* ---------- business rules (DFD 3.2) ---------- */
   function latestCheck(donorId) {
@@ -264,11 +283,12 @@
       const allowed = COMPATIBLE[bg] || [];
       const list = db.Donor.filter(d => allowed.includes(d.blood_group)).map(d => {
         const r = donorReadiness(d);
-        const proximity = area && d.current_location.toLowerCase() === area.toLowerCase() ? 0 : (dist && d.district === dist ? 1 : 2);
+        const sameDistrict = dist && d.district === dist;
+        const proximity = sameDistrict && area && d.current_location === area ? 0 : (sameDistrict ? 1 : 2);
         return { d, r, proximity, exact: d.blood_group === bg ? 0 : 1 };
       }).filter(x => !onlyReady || x.r.ready)
         .sort((a, b) => (b.r.ready - a.r.ready) || (a.proximity - b.proximity) || (a.exact - b.exact) || (b.r.gap - a.r.gap));
-      const where = ["Same area", "Same district", "Other district"];
+      const where = ["Same upazila", "Same district", "Other district"];
       results = `<h2 style="margin-top:6px">${list.length} matching donor${list.length === 1 ? "" : "s"} for ${esc(bg)}</h2>
         <p class="rank">Accepts ${allowed.join(", ")}. Ranked by readiness, distance, then exact group match.</p>
         <div class="donor-list">${list.map(x => {
@@ -291,8 +311,8 @@
       ${req ? `<div class="note">Searching for request <b>${req.request_id}</b>: ${req.units_needed} unit(s) of ${esc(req.blood_group)} ${esc(req.component).toLowerCase()} at ${esc(req.hospital_name)} (${esc(req.reason)}).</div>` : ""}
       <form class="card form" id="findForm">
         ${field("Blood group needed", `<select name="bg" required>${opts(GROUPS, bg, "Select group")}</select>`)}
-        ${field("District", `<select name="district">${districtOpts(dist, "Any district")}</select>`)}
-        ${field("Area / location", `<input name="area" list="areas" value="${esc(area)}" placeholder="Mirpur-10"><datalist id="areas">${locationsInUse().map(l => `<option value="${esc(l)}">`).join("")}</datalist>`)}
+        ${field("District", `<select name="district" data-district>${districtOpts(dist, "Any district")}</select>`)}
+        ${field("Upazila / city area", areaSelect("area", dist, area, "Any upazila"))}
         ${field("Show", `<select name="ready">${opts([{ value: "1", label: "Ready donors only" }, { value: "0", label: "All compatible donors" }], onlyReady ? "1" : "0")}</select>`)}
         <input type="hidden" name="req" value="${req ? req.request_id : ""}">
         <div class="field"><button class="btn primary" type="submit">Search donors</button></div>
@@ -411,7 +431,8 @@
     const q = (params.q || "").toLowerCase();
     const g = params.bg || "";
     const di = params.district || "";
-    const rows = db.Donor.filter(d => (!g || d.blood_group === g) && (!di || d.district === di) &&
+    const ar = params.area || "";
+    const rows = db.Donor.filter(d => (!g || d.blood_group === g) && (!di || d.district === di) && (!ar || d.current_location === ar) &&
       (!q || [d.donor_id, d.name, d.phone, d.current_location].join(" ").toLowerCase().includes(q)));
     return `
       <div class="page-head"><div><h1>Donors</h1><p>Registered blood donors (data store D1). Readiness combines the 120-day gap, account status and the latest medical check.</p></div>
@@ -419,7 +440,8 @@
       <div class="toolbar" data-filter="donors">
         <input class="grow" name="q" placeholder="Search name, phone, area" value="${esc(params.q || "")}">
         <select name="bg">${opts(GROUPS, g, "All groups")}</select>
-        <select name="district">${districtOpts(di, "All districts")}</select>
+        <select name="district" data-district>${districtOpts(di, "All districts")}</select>
+        ${areaSelect("area", di, ar, "All upazilas")}
       </div>
       <div class="table-wrap"><table><thead><tr><th>ID</th><th>Name</th><th>Group</th><th>Gender</th><th>Phone</th><th>Location</th><th>Last donation</th><th>Days since</th><th>Donations</th><th>Status</th><th>Ready</th><th></th></tr></thead><tbody>
       ${rows.map(d => {
@@ -673,15 +695,16 @@
       ${field("Mobile number", `<input name="phone" required placeholder="01712345678" inputmode="numeric">`)}
       ${isDonor ? field("Blood group", `<select name="blood_group" required>${opts(GROUPS, "", "Select")}</select>`) : field("Relation to patient", `<select name="relation_to_patient">${opts(["Self", "Father", "Mother", "Spouse", "Brother", "Sister", "Son", "Daughter", "Friend"], "Self")}</select>`)}
       ${isDonor ? field("Date of birth", `<input name="date_of_birth" type="date" required>`) : ""}
-      ${field("Area / location", `<input name="location" required placeholder="Mirpur-10">`)}
-      ${field("District", `<select name="district" required>${districtOpts("", "Select")}</select>`)}
+      ${field("District", `<select name="district" data-district required>${districtOpts("", "Select")}</select>`)}
+      ${field("Upazila / city area", areaSelect("location", "", "", "Select upazila", true))}
       ${isDonor ? field("Last donation date", `<input name="last_donation_date" type="date">`) + field("Previous donations", `<input name="total_donations" type="number" min="0" value="0">`) : ""}
     </div>`;
   }
   function validatePerson(f) {
     if ((f.name || "").trim().length < 3) return "Enter the full name.";
     if (!/^01[3-9]\d{8}$/.test((f.phone || "").trim())) return "Enter a valid 11-digit Bangladeshi mobile number (01XXXXXXXXX).";
-    if (!(f.location || "").trim() || !f.district) return "Enter the area and district.";
+    if (!f.district) return "Select the district.";
+    if (!(f.location || "").trim()) return "Select the upazila or city area.";
     return "";
   }
 
@@ -711,6 +734,8 @@
     clearTimeout(bar._t);
     bar._t = setTimeout(() => {
       const p = new URLSearchParams();
+      // a new district makes the old upazila meaningless, so drop it
+      if (e.target.matches("select[data-district]")) { const a = bar.querySelector("select[data-area]"); if (a) a.value = ""; }
       bar.querySelectorAll("input,select").forEach(i => { if (i.value) p.set(i.name, i.value); });
       const active = document.activeElement && document.activeElement.name;
       history.replaceState(null, "", `#${bar.dataset.filter}${p.toString() ? "?" + p : ""}`);

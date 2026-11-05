@@ -18,7 +18,7 @@ The screens follow the processes in the Level-1 Data Flow Diagram.
 | 4.2 Transportation aid | Transportation | A ride is booked for an accepted donor. The fare is calculated from the vehicle type and distance. |
 | 4.3 Payment for transportation | Payments | The seeker pays the fare by bKash, Nagad, Rocket, cash or card. |
 
-District lists cover all 64 districts of Bangladesh, grouped under the 8 divisions.
+District lists cover all 64 districts of Bangladesh, grouped under the 8 divisions. Choosing a district fills the next list with that district's upazilas only (494 in total). Metro districts (Dhaka, Chattogram, Khulna, Rajshahi and Gazipur) also list their main city corporation areas, such as Mirpur, Dhanmondi, Panchlaish and Boalia. A donor in the seeker's own upazila is ranked first, then donors elsewhere in the same district.
 
 Other screens: dashboard, blood requests, donor and seeker registration, and a database view of all seven tables with CSV download.
 
@@ -55,7 +55,7 @@ Derived values (donor readiness, eligibility, days since last donation, fare) ar
 
 ## Sample data
 
-`js/data.js` holds the sample database: 30 donors, 15 seekers, 20 requests, 36 medical checks, 28 proposals, 13 trips and 12 payments. Locations and hospitals are real places in Bangladesh. All names, phone numbers and transaction references are fictitious.
+`js/data.js` holds the sample database: 30 donors, 15 seekers, 20 requests, 36 medical checks, 28 proposals, 13 trips and 12 payments. Locations and hospitals are real places in Bangladesh. The upazila list is based on the open nuhil/bangladesh-geocode dataset (MIT licence), with spellings updated to current official forms. All names, phone numbers and transaction references are fictitious.
 
 Changes made in the app are saved in the browser's local storage. **Database tables → Reset sample data** restores the original records.
 
@@ -68,6 +68,7 @@ No installation or build step is needed. Open `index.html` in any modern browser
 ```
 index.html      page shell and navigation
 css/style.css   layout and styling (desktop and mobile)
+js/geo.js       districts, upazilas and city areas
 js/data.js      sample database
 js/app.js       screens, business rules and data handling
 ```
