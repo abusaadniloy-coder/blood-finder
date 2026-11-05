@@ -20,6 +20,8 @@ The screens follow the processes in the Level-1 Data Flow Diagram.
 
 District lists cover all 64 districts of Bangladesh, grouped under the 8 divisions. Choosing a district fills the next list with that district's upazilas only (494 in total). Metro districts (Dhaka, Chattogram, Khulna, Rajshahi and Gazipur) also list their main city corporation areas, such as Mirpur, Dhanmondi, Panchlaish and Boalia. Each blood request records the hospital's district and upazila. When donors are searched for a request, a donor in the hospital's own upazila is ranked first, then donors elsewhere in the same district.
 
+**Hospital directory:** 596 hospitals across all 64 districts, each tied to its district and upazila. It includes 39 medical college hospitals, 16 specialised institutes, 65 district and general hospitals, 42 major private hospitals and the Upazila Health Complex of each of the 434 non-sadar upazilas. In the new blood request form, choosing a district lists that district's hospitals, and choosing an upazila puts that upazila's hospitals first. A hospital can also be found by name from anywhere in the country. A hospital that is not listed can still be entered with "Other hospital". District hospitals without a well-known proper name are listed as "<District> District Sadar Hospital". The Hospitals page lets you browse and search the whole directory.
+
 Other screens: dashboard, blood requests, donor and seeker registration, and a database view of all seven tables with CSV download.
 
 ## Business rules
@@ -69,6 +71,7 @@ No installation or build step is needed. Open `index.html` in any modern browser
 index.html      page shell and navigation
 css/style.css   layout and styling (desktop and mobile)
 js/geo.js       districts, upazilas and city areas
+js/hospitals.js hospital directory
 js/data.js      sample database
 js/app.js       screens, business rules and data handling
 ```
