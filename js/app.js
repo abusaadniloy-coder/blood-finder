@@ -34,9 +34,20 @@
     "AB-": ["AB-", "A-", "B-", "O-"],
     "AB+": GROUPS.slice()
   };
-  const DISTRICTS = ["Barishal", "Bogura", "Chattogram", "Cumilla", "Cox's Bazar", "Dhaka", "Dinajpur", "Faridpur",
-    "Gazipur", "Jashore", "Khulna", "Kushtia", "Madaripur", "Munshiganj", "Mymensingh", "Narayanganj", "Pirojpur",
-    "Rajshahi", "Rangpur", "Shariatpur", "Sylhet", "Tangail"];
+  // All 64 districts of Bangladesh, grouped by the 8 divisions
+  const DIVISIONS = {
+    "Barishal": ["Barguna", "Barishal", "Bhola", "Jhalokati", "Patuakhali", "Pirojpur"],
+    "Chattogram": ["Bandarban", "Brahmanbaria", "Chandpur", "Chattogram", "Cox's Bazar", "Cumilla", "Feni",
+      "Khagrachhari", "Lakshmipur", "Noakhali", "Rangamati"],
+    "Dhaka": ["Dhaka", "Faridpur", "Gazipur", "Gopalganj", "Kishoreganj", "Madaripur", "Manikganj", "Munshiganj",
+      "Narayanganj", "Narsingdi", "Rajbari", "Shariatpur", "Tangail"],
+    "Khulna": ["Bagerhat", "Chuadanga", "Jashore", "Jhenaidah", "Khulna", "Kushtia", "Magura", "Meherpur", "Narail", "Satkhira"],
+    "Mymensingh": ["Jamalpur", "Mymensingh", "Netrokona", "Sherpur"],
+    "Rajshahi": ["Bogura", "Chapai Nawabganj", "Joypurhat", "Naogaon", "Natore", "Pabna", "Rajshahi", "Sirajganj"],
+    "Rangpur": ["Dinajpur", "Gaibandha", "Kurigram", "Lalmonirhat", "Nilphamari", "Panchagarh", "Rangpur", "Thakurgaon"],
+    "Sylhet": ["Habiganj", "Moulvibazar", "Sunamganj", "Sylhet"]
+  };
+  const DISTRICTS = Object.values(DIVISIONS).flat().sort();
   const PICKUP = ["App-arranged ride", "Seeker picks up donor", "Donor travels by own arrangement"];
   const PAY_METHODS = ["bKash", "Nagad", "Rocket", "Cash", "Card"];
 
@@ -123,11 +134,12 @@
     clearTimeout(toast._t);
     toast._t = setTimeout(() => t.classList.remove("show"), 2600);
   }
-  function districtsInUse() {
-    const set = new Set(DISTRICTS);
-    db.Donor.forEach(d => set.add(d.district));
-    db.Blood_Seeker.forEach(s => set.add(s.district));
-    return [...set].sort();
+  // District dropdown: all 64 districts under their division headings
+  function districtOpts(sel, placeholder) {
+    return (placeholder ? `<option value="">${esc(placeholder)}</option>` : "") +
+      Object.entries(DIVISIONS).map(([div, list]) =>
+        `<optgroup label="${esc(div)} Division">${list.map(d =>
+          `<option value="${esc(d)}"${d === sel ? " selected" : ""}>${esc(d)}</option>`).join("")}</optgroup>`).join("");
   }
   function locationsInUse() {
     const set = new Set();
@@ -279,7 +291,7 @@
       ${req ? `<div class="note">Searching for request <b>${req.request_id}</b>: ${req.units_needed} unit(s) of ${esc(req.blood_group)} ${esc(req.component).toLowerCase()} at ${esc(req.hospital_name)} (${esc(req.reason)}).</div>` : ""}
       <form class="card form" id="findForm">
         ${field("Blood group needed", `<select name="bg" required>${opts(GROUPS, bg, "Select group")}</select>`)}
-        ${field("District", `<select name="district">${opts(districtsInUse(), dist, "Any district")}</select>`)}
+        ${field("District", `<select name="district">${districtOpts(dist, "Any district")}</select>`)}
         ${field("Area / location", `<input name="area" list="areas" value="${esc(area)}" placeholder="Mirpur-10"><datalist id="areas">${locationsInUse().map(l => `<option value="${esc(l)}">`).join("")}</datalist>`)}
         ${field("Show", `<select name="ready">${opts([{ value: "1", label: "Ready donors only" }, { value: "0", label: "All compatible donors" }], onlyReady ? "1" : "0")}</select>`)}
         <input type="hidden" name="req" value="${req ? req.request_id : ""}">
@@ -407,7 +419,7 @@
       <div class="toolbar" data-filter="donors">
         <input class="grow" name="q" placeholder="Search name, phone, area" value="${esc(params.q || "")}">
         <select name="bg">${opts(GROUPS, g, "All groups")}</select>
-        <select name="district">${opts(districtsInUse(), di, "All districts")}</select>
+        <select name="district">${districtOpts(di, "All districts")}</select>
       </div>
       <div class="table-wrap"><table><thead><tr><th>ID</th><th>Name</th><th>Group</th><th>Gender</th><th>Phone</th><th>Location</th><th>Last donation</th><th>Days since</th><th>Donations</th><th>Status</th><th>Ready</th><th></th></tr></thead><tbody>
       ${rows.map(d => {
@@ -571,7 +583,7 @@
         ${field("Component", `<select name="component">${opts(["Whole blood", "Packed RBC", "Platelets", "Plasma"], "Whole blood")}</select>`)}
         ${field("Urgency", `<select name="urgency">${opts(["Emergency", "Urgent", "Scheduled"], "Emergency")}</select>`)}
         ${field("Hospital", `<input name="hospital_name" list="hosp" required placeholder="Dhaka Medical College Hospital"><datalist id="hosp">${hospitals.map(h => `<option value="${esc(h)}">`).join("")}</datalist>`, true)}
-        ${field("Hospital district", `<select name="hospital_district" required>${opts(districtsInUse(), "", "Select")}</select>`)}
+        ${field("Hospital district", `<select name="hospital_district" required>${districtOpts("", "Select")}</select>`)}
         ${field("Patient reference", `<input name="patient_ref" placeholder="Bed 12, Ward 5">`)}
         ${field("Reason", `<input name="reason" required placeholder="Road accident">`, true)}
       </div><p class="rank">Seeker not listed? Register them on the Blood seekers page first.</p>`, f => {
@@ -662,7 +674,7 @@
       ${isDonor ? field("Blood group", `<select name="blood_group" required>${opts(GROUPS, "", "Select")}</select>`) : field("Relation to patient", `<select name="relation_to_patient">${opts(["Self", "Father", "Mother", "Spouse", "Brother", "Sister", "Son", "Daughter", "Friend"], "Self")}</select>`)}
       ${isDonor ? field("Date of birth", `<input name="date_of_birth" type="date" required>`) : ""}
       ${field("Area / location", `<input name="location" required placeholder="Mirpur-10">`)}
-      ${field("District", `<select name="district" required>${opts(districtsInUse(), "", "Select")}</select>`)}
+      ${field("District", `<select name="district" required>${districtOpts("", "Select")}</select>`)}
       ${isDonor ? field("Last donation date", `<input name="last_donation_date" type="date">`) + field("Previous donations", `<input name="total_donations" type="number" min="0" value="0">`) : ""}
     </div>`;
   }

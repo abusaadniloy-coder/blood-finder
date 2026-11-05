@@ -18,6 +18,8 @@ The screens follow the processes in the Level-1 Data Flow Diagram.
 | 4.2 Transportation aid | Transportation | A ride is booked for an accepted donor. The fare is calculated from the vehicle type and distance. |
 | 4.3 Payment for transportation | Payments | The seeker pays the fare by bKash, Nagad, Rocket, cash or card. |
 
+District lists cover all 64 districts of Bangladesh, grouped under the 8 divisions.
+
 Other screens: dashboard, blood requests, donor and seeker registration, and a database view of all seven tables with CSV download.
 
 ## Business rules
