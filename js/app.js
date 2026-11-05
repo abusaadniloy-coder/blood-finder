@@ -173,8 +173,25 @@
   const HOSP_SHORT = { mch: "Medical college", inst: "Specialised", gov: "Government", pvt: "Private", uhc: "Upazila health complex" };
   const hospitalsOf = d => (window.HOSPITALS || {})[d] || [];
   const findHospital = (d, name) => hospitalsOf(d).find(h => h.n === name);
+  // With no district chosen: every hospital in the country, grouped by district (value "District||Name")
+  function allHospitalOpts() {
+    const total = Object.values(window.HOSPITALS || {}).reduce((s, l) => s + l.length, 0);
+    return `<option value="">Select hospital (all ${total} in Bangladesh)</option>` +
+      Object.keys(window.HOSPITALS || {}).sort().map(d => `<optgroup label="${esc(d)} district">${hospitalsOf(d).map(h =>
+        `<option value="${esc(d + "||" + h.n)}">${esc(h.n)} (${esc(h.u)})</option>`).join("")}</optgroup>`).join("") +
+      `<optgroup label="Not in the list"><option value="__other">Other hospital (type the name)</option></optgroup>`;
+  }
+  // With no district chosen: every upazila and city area, grouped by district (value "District||Upazila")
+  function allAreaOpts() {
+    return `<option value="">Select upazila (all districts)</option>` +
+      Object.keys(window.GEO || {}).sort().map(d => {
+        const g = window.GEO[d];
+        return `<optgroup label="${esc(d)} district">${g.upazilas.concat(g.city || []).map(u =>
+          `<option value="${esc(d + "||" + u)}">${esc(u)}</option>`).join("")}</optgroup>`;
+      }).join("");
+  }
   function hospitalOpts(district, upazila, sel) {
-    if (!district) return `<option value="">Select a district first</option>`;
+    if (!district) return allHospitalOpts();
     const list = hospitalsOf(district);
     const o = h => `<option value="${esc(h.n)}"${h.n === sel ? " selected" : ""}>${esc(h.n)}${upazila ? "" : ` (${esc(h.u)})`}</option>`;
     const group = (label, items) => items.length ? `<optgroup label="${esc(label)}">${items.map(o).join("")}</optgroup>` : "";
@@ -660,15 +677,16 @@
         ${field("Urgency", `<select name="urgency">${opts(["Emergency", "Urgent", "Scheduled"], "Emergency")}</select>`)}
         ${field("Search hospital by name (optional)", `<input id="hospSearch" list="hospAll" placeholder="Type a hospital name, for example Mitford" autocomplete="off"><datalist id="hospAll">${allHosp.map(x => `<option value="${esc(x.label)}">`).join("")}</datalist>`, true)}
         ${field("Hospital district", `<select name="hospital_district" data-district required>${districtOpts("", "Select")}</select>`)}
-        ${field("Hospital upazila / city area", areaSelect("hospital_upazila", "", "", "Select upazila", true))}
-        ${field("Hospital", `<select name="hospital_pick" id="hospPick" required disabled>${hospitalOpts("", "", "")}</select>`, true)}
+        ${field("Hospital upazila / city area", `<select name="hospital_upazila" data-area data-placeholder="Select upazila" required>${allAreaOpts()}</select>`)}
+        ${field("Hospital", `<select name="hospital_pick" id="hospPick" required>${allHospitalOpts()}</select>`, true)}
         <div class="field full" id="hospOtherBox" hidden><label>Hospital name</label><input name="hospital_name" placeholder="Name of the hospital or clinic"></div>
         ${field("Patient reference", `<input name="patient_ref" placeholder="Bed 12, Ward 5">`)}
         ${field("Reason", `<input name="reason" required placeholder="Road accident">`, true)}
-      </div><p class="rank">Pick the district and the hospital list shows that district's hospitals. Choosing an upazila narrows it further. If the hospital is not listed, choose "Other hospital" and type its name. Seeker not listed? Register them on the Blood seekers page first.</p>`, f => {
+      </div><p class="rank">The hospital and upazila lists show the whole country, grouped by district. Picking a hospital fills in its district and upazila. Picking a district or upazila first narrows the hospital list. If the hospital is not listed, choose "Other hospital" and type its name. Seeker not listed? Register them on the Blood seekers page first.</p>`, f => {
         if (!f.seeker_id || !f.blood_group || !f.hospital_district) return "Fill in seeker, blood group and hospital district.";
         if (!f.hospital_upazila) return "Select the hospital's upazila or city area.";
-        const hname = f.hospital_pick === "__other" ? (f.hospital_name || "").trim() : (f.hospital_pick || "");
+        const hname = f.hospital_pick === "__other" ? (f.hospital_name || "").trim() : (f.hospital_pick || "").split("||").pop();
+        if ((f.hospital_upazila || "").includes("||")) return "Select the hospital's upazila again.";
         if (!hname) return f.hospital_pick === "__other" ? "Type the hospital name." : "Select the hospital.";
         if (!(f.reason || "").trim()) return "Fill in the reason.";
         const id = nextId("Blood_Request", "request_id", "R");
@@ -683,28 +701,42 @@
       const other = $("#hospOtherBox");
       const rebuild = (sel) => {
         hp.innerHTML = hospitalOpts(ds.value, us.value, sel || "");
-        hp.disabled = !ds.value;
         toggleOther();
       };
       const toggleOther = () => {
         other.hidden = hp.value !== "__other";
         other.querySelector("input").required = !other.hidden;
       };
+      // fill district, upazila and hospital together
+      const setLocation = (d, u, n) => {
+        ds.value = d;
+        refreshArea(ds);
+        us.value = u || "";
+        rebuild(n || "");
+      };
       // district change: refreshArea (document listener) resets the upazila; rebuild after it runs
-      ds.addEventListener("change", () => setTimeout(() => rebuild(""), 0));
-      us.addEventListener("change", () => rebuild(hp.value && hp.value !== "__other" ? "" : hp.value));
+      ds.addEventListener("change", () => setTimeout(() => {
+        if (!ds.value) { us.innerHTML = allAreaOpts(); us.disabled = false; }
+        rebuild("");
+      }, 0));
+      us.addEventListener("change", () => {
+        if (us.value.includes("||")) { const [d, u] = us.value.split("||"); setLocation(d, u, ""); return; }
+        rebuild(hp.value && hp.value !== "__other" ? "" : hp.value);
+      });
       hp.addEventListener("change", () => {
+        if (hp.value.includes("||")) {
+          const [d, n] = hp.value.split("||");
+          const h = findHospital(d, n);
+          setLocation(d, h ? h.u : "", n);
+          return;
+        }
         const h = findHospital(ds.value, hp.value);
         if (h && us.value !== h.u) { us.value = h.u; rebuild(h.n); }
         toggleOther();
       });
       $("#hospSearch").addEventListener("input", e => {
         const x = allHosp.find(a => a.label === e.target.value);
-        if (!x) return;
-        ds.value = x.d;
-        refreshArea(ds);
-        us.value = x.h.u;
-        rebuild(x.h.n);
+        if (x) setLocation(x.d, x.h.u, x.h.n);
       });
     },
     "new-seeker"() {
