@@ -9,7 +9,7 @@
 (function () {
   "use strict";
 
-  const STORE_KEY = "bdf-db-v2";
+  const STORE_KEY = "bdf-db-v3";
   const GROUPS = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
   const SETTINGS = {
     minGapDays: 120,
@@ -276,7 +276,8 @@
     const req = params.req ? request(params.req) : null;
     const bg = params.bg || (req && req.blood_group) || "";
     const dist = params.district || (req && req.hospital_district) || "";
-    const area = params.area || "";
+    const fromReq = req && !params.district;
+    const area = params.area || (fromReq && req.hospital_upazila) || "";
     const onlyReady = params.ready !== "0";
     let results = "";
     if (bg) {
@@ -308,7 +309,7 @@
     return `
       <div class="page-head"><div><span class="step">Process 3.1 and 3.2</span><h1>Find nearest donor</h1>
         <p>Enter the blood group and where the blood is needed. The system checks compatibility, the 120-day donation gap and the latest medical status before listing donors.</p></div></div>
-      ${req ? `<div class="note">Searching for request <b>${req.request_id}</b>: ${req.units_needed} unit(s) of ${esc(req.blood_group)} ${esc(req.component).toLowerCase()} at ${esc(req.hospital_name)} (${esc(req.reason)}).</div>` : ""}
+      ${req ? `<div class="note">Searching for request <b>${req.request_id}</b>: ${req.units_needed} unit(s) of ${esc(req.blood_group)} ${esc(req.component).toLowerCase()} at ${esc(req.hospital_name)}, ${esc(req.hospital_upazila ? req.hospital_upazila + ", " : "")}${esc(req.hospital_district)} (${esc(req.reason)}).</div>` : ""}
       <form class="card form" id="findForm">
         ${field("Blood group needed", `<select name="bg" required>${opts(GROUPS, bg, "Select group")}</select>`)}
         ${field("District", `<select name="district" data-district>${districtOpts(dist, "Any district")}</select>`)}
@@ -340,7 +341,7 @@
         const open = r.request_status === "Pending" || r.request_status === "Partially fulfilled";
         return `<tr><td class="mono">${r.request_id}</td><td>${esc(s.name)}<div class="rank">${esc(s.phone)}</div></td>
           <td><span class="bg-pill">${r.blood_group}</span></td><td>${r.units_needed}</td><td>${esc(r.component)}</td>
-          <td>${esc(r.hospital_name)}<div class="rank">${esc(r.hospital_district)}</div></td><td>${esc(r.reason)}</td>
+          <td>${esc(r.hospital_name)}<div class="rank">${esc(r.hospital_upazila ? r.hospital_upazila + ", " : "")}${esc(r.hospital_district)}</div></td><td>${esc(r.reason)}</td>
           <td>${statusBadge(r.urgency)}</td><td>${fmtDT(r.request_time)}</td><td>${statusBadge(r.request_status)}</td>
           <td><div class="btn-row">${open ? `<a class="btn sm primary" href="#find?req=${r.request_id}">Find donors</a>
             <button class="btn sm" data-act="req-status" data-id="${r.request_id}" data-v="Fulfilled">Fulfilled</button>
@@ -605,18 +606,31 @@
         ${field("Component", `<select name="component">${opts(["Whole blood", "Packed RBC", "Platelets", "Plasma"], "Whole blood")}</select>`)}
         ${field("Urgency", `<select name="urgency">${opts(["Emergency", "Urgent", "Scheduled"], "Emergency")}</select>`)}
         ${field("Hospital", `<input name="hospital_name" list="hosp" required placeholder="Dhaka Medical College Hospital"><datalist id="hosp">${hospitals.map(h => `<option value="${esc(h)}">`).join("")}</datalist>`, true)}
-        ${field("Hospital district", `<select name="hospital_district" required>${districtOpts("", "Select")}</select>`)}
+        ${field("Hospital district", `<select name="hospital_district" data-district required>${districtOpts("", "Select")}</select>`)}
+        ${field("Hospital upazila / city area", areaSelect("hospital_upazila", "", "", "Select upazila", true))}
         ${field("Patient reference", `<input name="patient_ref" placeholder="Bed 12, Ward 5">`)}
         ${field("Reason", `<input name="reason" required placeholder="Road accident">`, true)}
-      </div><p class="rank">Seeker not listed? Register them on the Blood seekers page first.</p>`, f => {
+      </div><p class="rank">Choosing a hospital already in the list fills in its district and upazila. Seeker not listed? Register them on the Blood seekers page first.</p>`, f => {
         if (!f.seeker_id || !f.blood_group || !f.hospital_district) return "Fill in seeker, blood group and hospital district.";
+        if (!f.hospital_upazila) return "Select the hospital's upazila or city area.";
         if (!(f.hospital_name || "").trim() || !(f.reason || "").trim()) return "Fill in hospital and reason.";
         const id = nextId("Blood_Request", "request_id", "R");
         db.Blood_Request.push({ request_id: id, seeker_id: f.seeker_id, patient_ref: f.patient_ref || "—", blood_group: f.blood_group,
           units_needed: +f.units_needed, component: f.component, hospital_name: f.hospital_name.trim(), hospital_district: f.hospital_district,
-          reason: f.reason.trim(), urgency: f.urgency, request_time: nowLocal(), request_status: "Pending" });
+          reason: f.reason.trim(), urgency: f.urgency, request_time: nowLocal(), request_status: "Pending", hospital_upazila: f.hospital_upazila });
         save(); toast(`Request ${id} created`); location.hash = `#find?req=${id}`; return true;
       }, "Create and find donors");
+      // known hospital typed or picked: fill in its district and upazila
+      const known = {};
+      db.Blood_Request.forEach(r => { if (r.hospital_upazila) known[r.hospital_name] = r; });
+      $("#modal input[name=hospital_name]").addEventListener("input", e => {
+        const k = known[e.target.value.trim()];
+        if (!k) return;
+        const ds = $("#modal select[name=hospital_district]");
+        ds.value = k.hospital_district;
+        refreshArea(ds);
+        $("#modal select[name=hospital_upazila]").value = k.hospital_upazila;
+      });
     },
     "new-seeker"() {
       openModal("Register blood seeker", personForm(false), f => {
@@ -721,7 +735,7 @@
     $("#sidenav").classList.remove("open");
     $("#menuBtn").setAttribute("aria-expanded", "false");
   }
-  window.addEventListener("hashchange", () => { render(); window.scrollTo(0, 0); });
+  window.addEventListener("hashchange", () => { if (modal.open) modal.close(); render(); window.scrollTo(0, 0); });
 
   document.addEventListener("click", e => {
     const btn = e.target.closest("[data-act]");

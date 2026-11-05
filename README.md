@@ -18,7 +18,7 @@ The screens follow the processes in the Level-1 Data Flow Diagram.
 | 4.2 Transportation aid | Transportation | A ride is booked for an accepted donor. The fare is calculated from the vehicle type and distance. |
 | 4.3 Payment for transportation | Payments | The seeker pays the fare by bKash, Nagad, Rocket, cash or card. |
 
-District lists cover all 64 districts of Bangladesh, grouped under the 8 divisions. Choosing a district fills the next list with that district's upazilas only (494 in total). Metro districts (Dhaka, Chattogram, Khulna, Rajshahi and Gazipur) also list their main city corporation areas, such as Mirpur, Dhanmondi, Panchlaish and Boalia. A donor in the seeker's own upazila is ranked first, then donors elsewhere in the same district.
+District lists cover all 64 districts of Bangladesh, grouped under the 8 divisions. Choosing a district fills the next list with that district's upazilas only (494 in total). Metro districts (Dhaka, Chattogram, Khulna, Rajshahi and Gazipur) also list their main city corporation areas, such as Mirpur, Dhanmondi, Panchlaish and Boalia. Each blood request records the hospital's district and upazila. When donors are searched for a request, a donor in the hospital's own upazila is ranked first, then donors elsewhere in the same district.
 
 Other screens: dashboard, blood requests, donor and seeker registration, and a database view of all seven tables with CSV download.
 
@@ -44,7 +44,7 @@ Other screens: dashboard, blood requests, donor and seeker registration, and a d
 The app uses the seven relations of the relational model. Primary keys are marked PK and foreign keys FK.
 
 - `BLOOD_SEEKER` (seeker_id PK, name, gender, phone, location, district, relation_to_patient, registration_date)
-- `BLOOD_REQUEST` (request_id PK, seeker_id FK, patient_ref, blood_group, units_needed, component, hospital_name, hospital_district, reason, urgency, request_time, request_status)
+- `BLOOD_REQUEST` (request_id PK, seeker_id FK, patient_ref, blood_group, units_needed, component, hospital_name, hospital_district, hospital_upazila, reason, urgency, request_time, request_status)
 - `DONOR` (donor_id PK, name, gender, date_of_birth, blood_group, phone, current_location, district, last_donation_date, total_donations, status, registration_date)
 - `MEDICAL_STATUS` (status_id PK, donor_id FK, check_date, haemoglobin, weight, blood_pressure, hepatitis_B_screen, health_condition)
 - `DONATION_PROPOSAL` (proposal_id PK, request_id FK, donor_id FK, proposal_time, pickup_method, proposal_status, response_time)
