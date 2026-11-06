@@ -61,6 +61,16 @@ Derived values (donor readiness, eligibility, days since last donation, fare) ar
 
 Changes made in the app are saved in the browser's local storage. **Database tables → Reset sample data** restores the original records.
 
+## Phone app
+
+BLOOD FINDER can be used as a phone app in two ways. Both work without internet once installed.
+
+**Android APK (demo):** download [blood-finder.apk](https://github.com/abusaadniloy-coder/blood-finder/releases/latest/download/blood-finder.apk) on the phone, open it and tap Install. Allow "Install unknown apps" if Android asks, and choose "Install anyway" if Play Protect warns that the app is unrecognised (it is not on the Play Store). Needs Android 6.0 or newer.
+
+**Install from the browser:** open the website in Chrome (Android) and choose ⋮ → Add to Home screen, or in Safari (iPhone) choose Share → Add to Home Screen. The **Install on phone** page in the app shows the same steps.
+
+The APK is built automatically by GitHub Actions (`.github/workflows/android-apk.yml`) every time the site changes, using the Capacitor wrapper in `android-app/`, and published as the `demo-apk` release.
+
 ## Running it
 
 No installation or build step is needed. Open `index.html` in any modern browser, or publish the folder with GitHub Pages (**Settings → Pages → Deploy from branch → main / root**).
@@ -74,4 +84,8 @@ js/geo.js       districts, upazilas and city areas
 js/hospitals.js hospital directory
 js/data.js      sample database
 js/app.js       screens, business rules and data handling
+sw.js           offline cache for the installed app
+manifest.webmanifest  app name, icon and colours
+icons/          app icons
+android-app/    Android (APK) wrapper, built by GitHub Actions
 ```
