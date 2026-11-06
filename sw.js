@@ -1,5 +1,5 @@
 /* Offline cache for BLOOD FINDER. Bump VERSION whenever app files change. */
-const VERSION = "bf-v1";
+const VERSION = "bf-v2";
 const FILES = [
   "./", "./index.html", "./manifest.webmanifest",
   "./css/style.css", "./js/app.js", "./js/data.js", "./js/geo.js", "./js/hospitals.js",

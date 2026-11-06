@@ -9,7 +9,7 @@
 (function () {
   "use strict";
 
-  const STORE_KEY = "bdf-db-v3";
+  const STORE_KEY = "bdf-db-v4";
   const GROUPS = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
   const SETTINGS = {
     minGapDays: 120,
@@ -50,6 +50,8 @@
   const DISTRICTS = Object.values(DIVISIONS).flat().sort();
   const PICKUP = ["App-arranged ride", "Seeker picks up donor", "Donor travels by own arrangement"];
   const PAY_METHODS = ["bKash", "Nagad", "Rocket", "Cash", "Card"];
+  const ONLINE_PAY = ["bKash", "Nagad", "Rocket", "Card"];
+  const VEHICLE_TYPES = Object.keys(SETTINGS.fares);
 
   /* ---------- data store ---------- */
   let db = load();
@@ -82,6 +84,8 @@
   const request = id => byId("Blood_Request", "request_id", id);
   const proposal = id => byId("Donation_Proposal", "proposal_id", id);
   const transport = id => byId("Transportation", "transport_id", id);
+  const vehicle = id => byId("Vehicle", "vehicle_id", id);
+  const paymentFor = tid => db.Payment.find(x => x.transport_id === tid);
 
   /* ---------- helpers ---------- */
   const $ = (s, el = document) => el.querySelector(s);
@@ -123,7 +127,8 @@
     const map = {
       "Fulfilled": "ok", "Accepted": "ok", "Completed": "ok", "Paid": "ok", "Active": "ok", "Yes": "ok", "Negative": "ok", "Fit": "ok",
       "Pending": "warn", "Partially fulfilled": "warn", "No response": "warn", "Scheduled": "info", "Urgent": "warn",
-      "Emergency": "red", "Declined": "red", "Cancelled": "grey", "Withdrawn": "grey", "Inactive": "grey", "No": "red", "Positive": "red"
+      "Emergency": "red", "Declined": "red", "Cancelled": "grey", "Withdrawn": "grey", "Inactive": "grey", "No": "red", "Positive": "red",
+      "Available": "ok", "On trip": "info", "Refund due": "warn", "Refunded": "grey"
     };
     return badge(s || "—", map[s] || "grey");
   }
@@ -293,6 +298,7 @@
         <div class="kpi"><span>Proposal acceptance</span><strong>${props.length ? Math.round(acc / props.length * 100) : 0}%</strong></div>
         <div class="kpi"><span>Blood seekers</span><strong>${db.Blood_Seeker.length}</strong></div>
         <div class="kpi"><span>Transport payments received</span><strong>${taka(paid)}</strong></div>
+        <div class="kpi"><span>Vehicles available now</span><strong>${db.Vehicle.filter(v => v.status === "Available").length} / ${db.Vehicle.length}</strong></div>
       </div>
       <div class="grid k2">
         <div class="card"><h2>Donors by blood group</h2>
@@ -394,8 +400,8 @@
       .sort((a, b) => (b.proposal_time || "").localeCompare(a.proposal_time || ""));
     return `
       <div class="page-head"><div><span class="step">Process 4.1</span><h1>Proposals and pickup</h1>
-        <p>Each proposal links a blood request to a donor and records the agreed pickup method. When the donor accepts and a ride is needed, arrange transport.</p></div></div>
-      <div class="flow"><span class="on">Proposal sent</span><b>→</b><span>Donor confirms</span><b>→</b><span>Transport arranged</span><b>→</b><span>Payment</span></div>
+        <p>Each proposal links a blood request to a donor and records the agreed pickup method. When the donor accepts an app-arranged ride, book a registered vehicle and pay for it in the same step.</p></div></div>
+      <div class="flow"><span class="on">Proposal sent</span><b>→</b><span>Donor confirms</span><b>→</b><span>App vehicle booked</span><b>→</b><span>Payment</span></div>
       <div class="toolbar" data-filter="proposals"><select name="status">${opts(["Pending", "Accepted", "Declined", "No response", "Withdrawn"], st, "All statuses")}</select></div>
       <div class="table-wrap"><table><thead><tr><th>ID</th><th>Request</th><th>Donor</th><th>Group</th><th>Sent</th><th>Pickup method</th><th>Status</th><th>Responded</th><th></th></tr></thead><tbody>
       ${rows.map(p => {
@@ -403,15 +409,17 @@
         const r = request(p.request_id) || {};
         const hasT = db.Transportation.some(t => t.proposal_id === p.proposal_id && t.trip_status !== "Cancelled");
         const waiting = p.proposal_status === "Pending" || p.proposal_status === "No response";
-        const needsRide = p.proposal_status === "Accepted" && p.pickup_method !== "Donor travels by own arrangement" && !hasT;
+        const needsRide = p.proposal_status === "Accepted" && p.pickup_method === "App-arranged ride" && !hasT;
+        const ownWay = p.proposal_status === "Accepted" && p.pickup_method !== "App-arranged ride";
         return `<tr><td class="mono">${p.proposal_id}</td><td class="mono">${p.request_id}<div class="rank">${esc(r.hospital_name || "")}</div></td>
           <td>${esc(d.name)}<div class="rank mono">${p.donor_id} · ${esc(d.phone || "")}</div></td><td><span class="bg-pill">${esc(d.blood_group || "")}</span></td>
           <td>${fmtDT(p.proposal_time)}</td><td>${esc(p.pickup_method)}</td><td>${statusBadge(p.proposal_status)}</td><td>${fmtDT(p.response_time)}</td>
           <td><div class="btn-row">
             ${waiting ? `<button class="btn sm primary" data-act="prop-status" data-id="${p.proposal_id}" data-v="Accepted">Donor accepts</button>
               <button class="btn sm" data-act="prop-status" data-id="${p.proposal_id}" data-v="Declined">Declines</button>` : ""}
-            ${needsRide ? `<button class="btn sm primary" data-act="arrange" data-id="${p.proposal_id}">Arrange transport</button>` : ""}
-            ${hasT ? badge("Transport arranged", "info") : ""}</div></td></tr>`;
+            ${needsRide ? `<button class="btn sm primary" data-act="arrange" data-id="${p.proposal_id}">Book app vehicle</button>` : ""}
+            ${hasT ? badge("App vehicle booked", "info") : ""}
+            ${ownWay ? badge(p.pickup_method === "Seeker picks up donor" ? "Seeker brings donor" : "Donor comes on own", "grey") : ""}</div></td></tr>`;
       }).join("") || `<tr><td colspan="9" class="empty">No proposals yet.</td></tr>`}
       </tbody></table></div>`;
   };
@@ -421,24 +429,29 @@
     const rows = db.Transportation.slice().sort((a, b) => (b.pickup_time || "").localeCompare(a.pickup_time || ""));
     return `
       <div class="page-head"><div><span class="step">Process 4.2</span><h1>Transportation aid</h1>
-        <p>Rides arranged to bring donors to the hospital. Fare = base fare + rate per km for the vehicle type.</p></div></div>
+        <p>App-arranged rides that bring donors to the hospital in a registered vehicle. Fare = base fare + rate per km for the vehicle type.</p></div>
+        <a class="btn" href="#vehicles">Registered vehicles</a></div>
       <div class="card"><h2>Fare rates</h2><div class="table-wrap"><table><thead><tr><th>Vehicle</th><th>Base fare</th><th>Per km</th><th>10 km trip</th></tr></thead><tbody>
         ${Object.entries(SETTINGS.fares).map(([v, f]) => `<tr><td>${v}</td><td>${taka(f.base)}</td><td>${taka(f.perKm)}</td><td>${taka(fareFor(v, 10))}</td></tr>`).join("")}
       </tbody></table></div></div>
-      <div class="table-wrap"><table><thead><tr><th>ID</th><th>Proposal</th><th>Donor</th><th>Vehicle</th><th>Pickup</th><th>Drop</th><th>Time</th><th>Km</th><th>Fare</th><th>Status</th><th></th></tr></thead><tbody>
+      <div class="table-wrap"><table><thead><tr><th>ID</th><th>Proposal</th><th>Donor</th><th>Vehicle</th><th>Pickup</th><th>Drop</th><th>Time</th><th>Km</th><th>Fare</th><th>Payment</th><th>Status</th><th></th></tr></thead><tbody>
       ${rows.map(t => {
         const p = proposal(t.proposal_id) || {};
         const d = donor(p.donor_id) || {};
-        const paid = db.Payment.some(x => x.transport_id === t.transport_id);
-        return `<tr><td class="mono">${t.transport_id}</td><td class="mono">${t.proposal_id}</td><td>${esc(d.name)}</td><td>${esc(t.vehicle_type)}</td>
+        const v = vehicle(t.vehicle_id);
+        const pay = paymentFor(t.transport_id);
+        const paid = !!pay;
+        return `<tr><td class="mono">${t.transport_id}</td><td class="mono">${t.proposal_id}</td><td>${esc(d.name)}</td>
+          <td>${esc(t.vehicle_type)}${v ? `<div class="rank mono">${esc(v.registration_no)}</div><div class="rank">${esc(v.driver_name)} · ${esc(v.driver_phone)}</div>` : ""}</td>
           <td>${esc(t.pickup_point)}</td><td>${esc(t.drop_point)}</td><td>${fmtDT(t.pickup_time)}</td><td>${t.distance_km}</td>
-          <td><b>${taka(fareFor(t.vehicle_type, t.distance_km))}</b></td><td>${statusBadge(t.trip_status)}</td>
+          <td><b>${taka(fareFor(t.vehicle_type, t.distance_km))}</b></td>
+          <td>${pay ? `${esc(pay.payment_method === "Cash" ? "Cash to driver" : pay.payment_method)}<div>${statusBadge(pay.payment_status)}</div>` : "—"}</td><td>${statusBadge(t.trip_status)}</td>
           <td><div class="btn-row">
             ${t.trip_status === "Scheduled" ? `<button class="btn sm primary" data-act="trip" data-id="${t.transport_id}" data-v="Completed">Complete</button>
               <button class="btn sm" data-act="trip" data-id="${t.transport_id}" data-v="Cancelled">Cancel</button>` : ""}
             ${t.trip_status === "Completed" && !paid ? `<button class="btn sm primary" data-act="pay" data-id="${t.transport_id}">Record payment</button>` : ""}
-            ${paid ? badge("Payment recorded", "info") : ""}</div></td></tr>`;
-      }).join("") || `<tr><td colspan="11" class="empty">No trips yet.</td></tr>`}
+            ${pay && pay.payment_status === "Pending" && t.trip_status === "Completed" ? `<button class="btn sm primary" data-act="mark-paid" data-id="${pay.payment_id}">Cash received</button>` : ""}</div></td></tr>`;
+      }).join("") || `<tr><td colspan="12" class="empty">No trips yet.</td></tr>`}
       </tbody></table></div>`;
   };
 
@@ -446,22 +459,56 @@
   views.payments = () => {
     const rows = db.Payment.slice().sort((a, b) => (b.payment_time || "").localeCompare(a.payment_time || ""));
     const paid = rows.filter(p => p.payment_status === "Paid").reduce((s, p) => s + (+p.amount || 0), 0);
-    const pend = rows.filter(p => p.payment_status !== "Paid").reduce((s, p) => s + (+p.amount || 0), 0);
+    const pend = rows.filter(p => p.payment_status === "Pending").reduce((s, p) => s + (+p.amount || 0), 0);
+    const refund = rows.filter(p => p.payment_status === "Refund due").reduce((s, p) => s + (+p.amount || 0), 0);
     return `
       <div class="page-head"><div><span class="step">Process 4.3</span><h1>Payment for transportation</h1>
-        <p>The blood seeker pays the transport fare. Mobile financial services (bKash, Nagad, Rocket), cash and card are accepted.</p></div></div>
+        <p>The blood seeker pays the fare when booking an app vehicle: online now (bKash, Nagad, Rocket or card) or in cash to the driver after the trip. Paid fares for cancelled trips become refunds.</p></div></div>
       <div class="grid k4" style="margin-bottom:18px">
         <div class="kpi"><span>Received</span><strong>${taka(paid)}</strong></div>
-        <div class="kpi"><span>Pending</span><strong>${taka(pend)}</strong></div>
+        <div class="kpi"><span>Cash to collect</span><strong>${taka(pend)}</strong></div>
+        <div class="kpi"><span>Refunds due</span><strong>${taka(refund)}</strong></div>
         <div class="kpi"><span>Transactions</span><strong>${rows.length}</strong></div>
       </div>
       <div class="table-wrap"><table><thead><tr><th>ID</th><th>Trip</th><th>Seeker</th><th>Amount</th><th>Method</th><th>Transaction ref</th><th>Time</th><th>Status</th><th></th></tr></thead><tbody>
       ${rows.map(p => {
         const s = seeker(p.seeker_id) || {};
         return `<tr><td class="mono">${p.payment_id}</td><td class="mono">${p.transport_id}</td><td>${esc(s.name)}</td><td><b>${taka(p.amount)}</b></td>
-          <td>${esc(p.payment_method)}</td><td class="mono">${esc(p.transaction_ref)}</td><td>${fmtDT(p.payment_time)}</td><td>${statusBadge(p.payment_status)}</td>
-          <td>${p.payment_status !== "Paid" ? `<button class="btn sm primary" data-act="mark-paid" data-id="${p.payment_id}">Mark paid</button>` : ""}</td></tr>`;
+          <td>${esc(p.payment_method === "Cash" ? "Cash to driver" : p.payment_method)}</td><td class="mono">${esc(p.transaction_ref)}</td><td>${fmtDT(p.payment_time)}</td><td>${statusBadge(p.payment_status)}</td>
+          <td>${p.payment_status === "Pending" ? `<button class="btn sm primary" data-act="mark-paid" data-id="${p.payment_id}">${p.payment_method === "Cash" ? "Cash received" : "Mark paid"}</button>` : ""}
+            ${p.payment_status === "Refund due" ? `<button class="btn sm" data-act="refunded" data-id="${p.payment_id}">Mark refunded</button>` : ""}</td></tr>`;
       }).join("") || `<tr><td colspan="9" class="empty">No payments yet.</td></tr>`}
+      </tbody></table></div>`;
+  };
+
+  views.vehicles = params => {
+    const ty = params.type || "", di = params.district || "", ar = params.area || "", st = params.status || "";
+    const q = (params.q || "").toLowerCase();
+    const rows = db.Vehicle.filter(v => (!ty || v.vehicle_type === ty) && (!di || v.district === di) && (!ar || v.upazila === ar) &&
+      (!st || v.status === st) && (!q || [v.vehicle_id, v.driver_name, v.driver_phone, v.registration_no].join(" ").toLowerCase().includes(q)));
+    const avail = db.Vehicle.filter(v => v.status === "Available").length;
+    return `
+      <div class="page-head"><div><span class="step">Process 4.2</span><h1>Registered vehicles</h1>
+        <p>Drivers register their CNG, car, motorbike, ambulance or private car here. Only active, available vehicles are offered when an app-arranged ride is booked.</p></div>
+        <button class="btn primary" data-act="new-vehicle">Register vehicle</button></div>
+      <div class="grid k4" style="margin-bottom:18px">
+        <div class="kpi"><span>Registered</span><strong>${db.Vehicle.length}</strong></div>
+        <div class="kpi"><span>Available now</span><strong>${avail}</strong></div>
+        <div class="kpi"><span>On a trip</span><strong>${db.Vehicle.filter(v => v.status === "On trip").length}</strong></div>
+      </div>
+      <div class="toolbar" data-filter="vehicles">
+        <input class="grow" name="q" placeholder="Search driver, phone, number plate" value="${esc(params.q || "")}">
+        <select name="type">${opts(VEHICLE_TYPES, ty, "All types")}</select>
+        <select name="district" data-district>${districtOpts(di, "All districts")}</select>
+        ${areaSelect("area", di, ar, "All upazilas")}
+        <select name="status">${opts(["Available", "On trip", "Inactive"], st, "All statuses")}</select>
+      </div>
+      <div class="table-wrap"><table><thead><tr><th>ID</th><th>Driver</th><th>Vehicle</th><th>Registration no.</th><th>Driving licence</th><th>Based at</th><th>Trips</th><th>Status</th><th></th></tr></thead><tbody>
+      ${rows.map(v => `<tr><td class="mono">${v.vehicle_id}</td><td>${esc(v.driver_name)}<div class="rank">${esc(v.driver_phone)}</div></td>
+        <td>${esc(v.vehicle_type)}</td><td class="mono">${esc(v.registration_no)}</td><td class="mono">${esc(v.driving_licence_no)}</td>
+        <td>${esc(v.upazila)}<div class="rank">${esc(v.district)}</div></td><td>${v.total_trips}</td><td>${statusBadge(v.status)}</td>
+        <td>${v.status !== "On trip" ? `<button class="btn sm" data-act="toggle-vehicle" data-id="${v.vehicle_id}">${v.status === "Inactive" ? "Activate" : "Deactivate"}</button>` : ""}</td></tr>`).join("")
+        || `<tr><td colspan="9" class="empty">No vehicles match.</td></tr>`}
       </tbody></table></div>`;
   };
 
@@ -562,7 +609,8 @@
     Donor: { pk: "donor_id", fk: {} },
     Medical_Status: { pk: "status_id", fk: { donor_id: "Donor" } },
     Donation_Proposal: { pk: "proposal_id", fk: { request_id: "Blood_Request", donor_id: "Donor" } },
-    Transportation: { pk: "transport_id", fk: { proposal_id: "Donation_Proposal" } },
+    Vehicle: { pk: "vehicle_id", fk: {} },
+    Transportation: { pk: "transport_id", fk: { proposal_id: "Donation_Proposal", vehicle_id: "Vehicle" } },
     Payment: { pk: "payment_id", fk: { transport_id: "Transportation", seeker_id: "Blood_Seeker" } }
   };
   views.tables = params => {
@@ -648,7 +696,7 @@
       openModal(`Send proposal to ${d.name}`, `<div class="form">
         ${field("Blood request", `<select name="request_id" required>${opts(open.map(r => ({ value: r.request_id, label: `${r.request_id} · ${r.blood_group} · ${r.hospital_name}` })), pre, "Select request")}</select>`, true)}
         ${field("Pickup method", `<select name="pickup_method" required>${opts(PICKUP, "App-arranged ride")}</select>`, true)}
-      </div><p class="rank">The donor is contacted on ${esc(d.phone)}. Their reply is recorded on the Proposals page.</p>`, f => {
+      </div><p class="rank">The donor is contacted on ${esc(d.phone)}. Their reply is recorded on the Proposals page. With an app-arranged ride, a registered vehicle is booked and paid for once the donor accepts.</p>`, f => {
         if (!f.request_id) return "Select a blood request.";
         if (db.Donation_Proposal.some(p => p.request_id === f.request_id && p.donor_id === d.donor_id && p.proposal_status !== "Declined" && p.proposal_status !== "Withdrawn"))
           return "This donor already has an active proposal for that request.";
@@ -667,28 +715,99 @@
       const p = proposal(btn.dataset.id);
       const d = donor(p.donor_id);
       const r = request(p.request_id);
-      openModal("Arrange transport", `<div class="form">
-        ${field("Vehicle type", `<select name="vehicle_type" id="fVeh">${opts(Object.keys(SETTINGS.fares), "CNG auto-rickshaw")}</select>`)}
+      const sk = seeker(r.seeker_id) || {};
+      // available vehicles, nearest to the donor first
+      const nearby = type => db.Vehicle.filter(v => v.status === "Available" && (!type || v.vehicle_type === type)).map(v => ({
+        v, rank: v.district === d.district && v.upazila === d.current_location ? 0 : v.district === d.district ? 1 : 2
+      })).sort((a, b) => a.rank - b.rank || b.v.total_trips - a.v.total_trips);
+      const where = ["same upazila", "same district", "other district"];
+      const vehicleOpts = type => {
+        const list = nearby(type);
+        if (!list.length) return `<option value="">No available ${type ? type.toLowerCase() : "vehicle"} right now</option>`;
+        const o = x => `<option value="${x.v.vehicle_id}">${esc(x.v.vehicle_type)} · ${esc(x.v.registration_no)} · ${esc(x.v.driver_name)} · ${esc(x.v.upazila)}${x.rank === 2 ? ", " + esc(x.v.district) : ""} (${where[x.rank]})</option>`;
+        const near = list.filter(x => x.rank < 2), far = list.filter(x => x.rank === 2);
+        return `<option value="">Select vehicle (${near.length} near the donor, ${far.length} elsewhere)</option>` +
+          (near.length ? `<optgroup label="Near the donor in ${esc(d.district)}">${near.map(o).join("")}</optgroup>` : "") +
+          (far.length ? `<optgroup label="Other districts${near.length ? "" : " (none available in " + esc(d.district) + ")"}">${far.map(o).join("")}</optgroup>` : "");
+      };
+      openModal("Book app vehicle", `<p class="rank">Donor ${esc(d.name)} (${esc(d.phone)}) at ${esc(d.current_location)}, ${esc(d.district)} → ${esc(r.hospital_name)}</p>
+        <div class="form">
+        ${field("Vehicle type", `<select id="fVeh">${opts(VEHICLE_TYPES, "", "Any type")}</select>`)}
         ${field("Distance (km)", `<input name="distance_km" id="fKm" type="number" min="0.5" max="500" step="0.1" value="8" required>`)}
+        ${field("Registered vehicle", `<select name="vehicle_id" id="fVid" required>${vehicleOpts("")}</select>`, true)}
         ${field("Pickup point", `<input name="pickup_point" value="${esc(d.current_location + ", " + d.district)}" required>`, true)}
         ${field("Drop point", `<input name="drop_point" value="${esc(r.hospital_name)}" required>`, true)}
         ${field("Pickup time", `<input name="pickup_time" type="datetime-local" value="${nowLocal()}" required>`)}
-        ${field("Estimated fare", `<input id="fFare" readonly value="${taka(fareFor("CNG auto-rickshaw", 8))}">`)}
-      </div>`, f => {
+        </div>
+        <div class="pay-box" id="paySection" hidden>
+          <h3>Payment</h3>
+          <dl class="kv"><dt>Driver</dt><dd id="payDriver"></dd><dt>Fare</dt><dd><b id="fFare"></b></dd><dt>Paid by</dt><dd>${esc(sk.name || "Blood seeker")}</dd></dl>
+          <div class="pay-opts">
+            <label class="radio"><input type="radio" name="pay_when" value="now" checked> Pay now online (bKash, Nagad, Rocket or card)</label>
+            <label class="radio"><input type="radio" name="pay_when" value="cash"> Pay cash to the driver after the trip</label>
+          </div>
+          <div class="form" id="payNow">
+            ${field("Payment method", `<select name="payment_method" id="fPm">${opts(ONLINE_PAY, "bKash")}</select>`)}
+            ${field("Transaction ID", `<input name="transaction_ref" id="fRef" placeholder="8N7A5K2Q1X" autocomplete="off">`)}
+          </div>
+          <p class="rank" id="payHint"></p>
+        </div>`, f => {
+        const v = vehicle(f.vehicle_id);
+        if (!v) return "Select a registered vehicle.";
+        if (v.status !== "Available") return "That vehicle is no longer available. Pick another.";
         if (!(+f.distance_km > 0)) return "Enter a distance greater than 0.";
-        db.Transportation.push({ transport_id: nextId("Transportation", "transport_id", "T"), proposal_id: p.proposal_id,
-          vehicle_type: f.vehicle_type, pickup_point: f.pickup_point, drop_point: f.drop_point, pickup_time: f.pickup_time,
-          distance_km: Math.round(+f.distance_km * 10) / 10, trip_status: "Scheduled" });
-        save(); toast("Transport arranged"); location.hash = "#transport"; return true;
-      }, "Book ride");
-      const upd = () => { $("#fFare").value = taka(fareFor($("#fVeh").value, $("#fKm").value)); };
-      $("#fVeh").addEventListener("change", upd);
-      $("#fKm").addEventListener("input", upd);
+        const amount = fareFor(v.vehicle_type, f.distance_km);
+        const now = f.pay_when !== "cash";
+        const ref = (f.transaction_ref || "").trim().toUpperCase();
+        if (now && !/^[A-Z0-9]{6,}$/.test(ref)) return "Enter the transaction ID from the payment SMS (at least 6 letters or numbers).";
+        const tid = nextId("Transportation", "transport_id", "T");
+        db.Transportation.push({ transport_id: tid, proposal_id: p.proposal_id, vehicle_type: v.vehicle_type, pickup_point: f.pickup_point,
+          drop_point: f.drop_point, pickup_time: f.pickup_time, distance_km: Math.round(+f.distance_km * 10) / 10, trip_status: "Scheduled", vehicle_id: v.vehicle_id });
+        v.status = "On trip";
+        db.Payment.push({ payment_id: nextId("Payment", "payment_id", "PAY"), transport_id: tid, seeker_id: r.seeker_id, amount,
+          payment_method: now ? f.payment_method : "Cash", transaction_ref: now ? ref : "CASH", payment_time: nowLocal(), payment_status: now ? "Paid" : "Pending" });
+        save();
+        toast(now ? `${taka(amount)} paid by ${f.payment_method}. ${v.driver_name} is on the way.` : `Booked. Pay ${taka(amount)} cash to ${v.driver_name} after the trip.`);
+        location.hash = "#transport"; return true;
+      }, "Book vehicle");
+      const veh = $("#fVeh"), vid = $("#fVid"), km = $("#fKm"), box = $("#paySection");
+      const update = () => {
+        const v = vehicle(vid.value);
+        box.hidden = !v;
+        if (!v) { $("#modalOk").textContent = "Book vehicle"; return; }
+        const amount = fareFor(v.vehicle_type, km.value);
+        const now = $("#modal input[name=pay_when]:checked").value === "now";
+        $("#fFare").textContent = taka(amount);
+        $("#payDriver").textContent = `${v.driver_name} · ${v.driver_phone} · ${v.registration_no}`;
+        $("#payNow").hidden = !now;
+        $("#fRef").required = now;
+        $("#payHint").textContent = now
+          ? `Send ${taka(amount)} with ${$("#fPm").value === "Card" ? "your card" : $("#fPm").value}, then type the transaction ID from the confirmation message. This is a demo: no real money is sent.`
+          : `The driver collects ${taka(amount)} in cash after dropping the donor at the hospital.`;
+        $("#modalOk").textContent = now ? `Book and pay ${taka(amount)}` : "Book, pay cash later";
+      };
+      veh.addEventListener("change", () => { vid.innerHTML = vehicleOpts(veh.value); update(); });
+      vid.addEventListener("change", update);
+      km.addEventListener("input", update);
+      $("#fPm").addEventListener("change", update);
+      document.querySelectorAll("#modal input[name=pay_when]").forEach(x => x.addEventListener("change", update));
     },
     trip(btn) {
       const t = transport(btn.dataset.id);
+      const v = vehicle(t.vehicle_id);
+      const pay = paymentFor(t.transport_id);
       t.trip_status = btn.dataset.v;
-      save(); render(); toast(`Trip ${t.transport_id} ${btn.dataset.v.toLowerCase()}`);
+      if (v) {
+        v.status = v.status === "On trip" ? "Available" : v.status;
+        if (btn.dataset.v === "Completed") v.total_trips = (+v.total_trips || 0) + 1;
+      }
+      let msg = `Trip ${t.transport_id} ${btn.dataset.v.toLowerCase()}`;
+      if (pay && btn.dataset.v === "Cancelled") {
+        if (pay.payment_status === "Paid") { pay.payment_status = "Refund due"; msg += `. ${taka(pay.amount)} to refund to the seeker`; }
+        else if (pay.payment_status === "Pending") pay.payment_status = "Cancelled";
+      }
+      if (pay && btn.dataset.v === "Completed" && pay.payment_status === "Pending") msg += `. Driver to collect ${taka(pay.amount)} cash`;
+      save(); render(); toast(msg);
     },
     pay(btn) {
       const t = transport(btn.dataset.id);
@@ -706,6 +825,42 @@
           amount, payment_method: f.payment_method, transaction_ref: ref || "CASH", payment_time: nowLocal(), payment_status: "Paid" });
         save(); toast("Payment recorded"); location.hash = "#payments"; return true;
       }, "Confirm payment");
+    },
+    refunded(btn) {
+      const p = db.Payment.find(x => x.payment_id === btn.dataset.id);
+      p.payment_status = "Refunded";
+      save(); render(); toast("Refund recorded");
+    },
+    "new-vehicle"() {
+      openModal("Register vehicle", `<p class="rank">For drivers who want to carry blood donors to hospitals. Fares follow the app's rates for each vehicle type.</p><div class="form">
+        ${field("Driver's full name", `<input name="driver_name" required placeholder="Md. Jamal Uddin">`, true)}
+        ${field("Driver's mobile", `<input name="driver_phone" required placeholder="01712345678" inputmode="numeric">`)}
+        ${field("Vehicle type", `<select name="vehicle_type" required>${opts(VEHICLE_TYPES, "", "Select")}</select>`)}
+        ${field("Registration (number plate)", `<input name="registration_no" required placeholder="Dhaka Metro-Tha 11-2345">`)}
+        ${field("Driving licence no.", `<input name="driving_licence_no" required placeholder="DK0412345678">`)}
+        ${field("District", `<select name="district" data-district required>${districtOpts("", "Select")}</select>`)}
+        ${field("Upazila / city area", areaSelect("upazila", "", "", "Select upazila", true))}
+      </div>`, f => {
+        if ((f.driver_name || "").trim().length < 3) return "Enter the driver's full name.";
+        if (!/^01[3-9]\d{8}$/.test((f.driver_phone || "").trim())) return "Enter a valid 11-digit Bangladeshi mobile number (01XXXXXXXXX).";
+        if (!f.vehicle_type) return "Select the vehicle type.";
+        const plateNo = (f.registration_no || "").trim().replace(/\s+/g, " ");
+        if (!/^[A-Za-z' ]+-[A-Za-z]+ \d{2}-\d{4}$/.test(plateNo)) return "Enter the number plate like Dhaka Metro-Tha 11-2345 or Kushtia-La 12-3456.";
+        if (db.Vehicle.some(v => v.registration_no.toLowerCase() === plateNo.toLowerCase())) return "A vehicle with this number plate is already registered.";
+        const lic = (f.driving_licence_no || "").trim().toUpperCase();
+        if (!/^[A-Z0-9]{8,}$/.test(lic)) return "Enter the driving licence number (at least 8 letters or numbers).";
+        if (!f.district || !f.upazila) return "Select the district and upazila where the vehicle is based.";
+        const id = nextId("Vehicle", "vehicle_id", "V");
+        db.Vehicle.push({ vehicle_id: id, driver_name: f.driver_name.trim(), driver_phone: f.driver_phone.trim(), vehicle_type: f.vehicle_type,
+          registration_no: plateNo, driving_licence_no: lic, district: f.district, upazila: f.upazila, status: "Available",
+          total_trips: 0, registration_date: nowLocal().slice(0, 10) });
+        save(); toast(`Vehicle ${id} registered and available for rides`); return true;
+      }, "Register");
+    },
+    "toggle-vehicle"(btn) {
+      const v = vehicle(btn.dataset.id);
+      v.status = v.status === "Inactive" ? "Available" : "Inactive";
+      save(); render();
     },
     "mark-paid"(btn) {
       const p = db.Payment.find(x => x.payment_id === btn.dataset.id);
