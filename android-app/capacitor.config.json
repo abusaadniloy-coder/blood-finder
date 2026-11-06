@@ -1,0 +1,9 @@
+{
+  "appId": "bd.bloodfinder.demo",
+  "appName": "BLOOD FINDER",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#8b1a1a",
+    "adjustMarginsForEdgeToEdge": "auto"
+  }
+}

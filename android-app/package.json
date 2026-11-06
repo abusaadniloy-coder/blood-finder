@@ -1,0 +1,15 @@
+{
+  "name": "blood-finder-android",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Android wrapper for the BLOOD FINDER demo app (built by GitHub Actions)",
+  "scripts": {
+    "prepare-www": "node prepare-www.mjs",
+    "icons": "node apply-icons.mjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "7.6.10",
+    "@capacitor/cli": "7.6.10",
+    "@capacitor/core": "7.6.10"
+  }
+}

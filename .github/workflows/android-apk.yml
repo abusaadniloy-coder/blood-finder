@@ -1,0 +1,65 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install Capacitor
+        run: npm ci
+
+      - name: Create Android project
+        run: |
+          node prepare-www.mjs
+          npx cap add android
+          node apply-icons.mjs
+          npx cap sync android
+
+      - name: Build APK
+        working-directory: android-app/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk ../blood-finder.apk
+
+      - name: Publish as a GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="Demo Android app of BLOOD FINDER, built from commit ${GITHUB_SHA::7}. Download blood-finder.apk on your Android phone, open it and tap Install. Allow 'Install unknown apps' if Android asks."
+          if gh release view demo-apk >/dev/null 2>&1; then
+            gh release upload demo-apk blood-finder.apk --clobber
+            gh release edit demo-apk --notes "$NOTES" --latest
+          else
+            gh release create demo-apk blood-finder.apk --title "BLOOD FINDER demo app (Android)" --notes "$NOTES" --latest
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blood-finder-apk
+          path: android-app/blood-finder.apk
