@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>BLOOD FINDER</title>
   <meta name="description" content="BLOOD FINDER, an emergency blood donor finder for Bangladesh: find the nearest eligible donor, send a donation proposal, arrange transport and record payment.">
+  <meta name="theme-color" content="#8b1a1a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Blood Finder">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icons/favicon-48.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -16,6 +24,7 @@
         <small>Emergency donor matching, Bangladesh</small>
       </div>
     </div>
+    <button class="install-btn" id="installBtn" hidden>Install app</button>
     <button class="menu-btn" id="menuBtn" aria-label="Open menu" aria-expanded="false">Menu</button>
   </header>
 
@@ -34,6 +43,8 @@
     <a href="#seekers" data-view="seekers">Blood seekers</a>
     <a href="#hospitals" data-view="hospitals">Hospitals</a>
     <a href="#tables" data-view="tables">Database tables</a>
+    <p class="navgroup">App</p>
+    <a href="#install" data-view="install">Install on phone</a>
   </nav>
 
   <main id="app" tabindex="-1"></main>

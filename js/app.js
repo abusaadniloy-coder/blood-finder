@@ -581,8 +581,61 @@
       </tbody></table></div>`;
   };
 
+  /* ---------- install as a phone app ---------- */
+  const APK_URL = "https://github.com/abusaadniloy-coder/blood-finder/releases/latest/download/blood-finder.apk";
+  const isNativeApp = !!window.Capacitor;
+  const isInstalled = () => isNativeApp || matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  let installPrompt = null;
+  window.addEventListener("beforeinstallprompt", e => {
+    e.preventDefault();
+    installPrompt = e;
+    $("#installBtn").hidden = false;
+    if (parseHash().view === "install") render();
+  });
+  window.addEventListener("appinstalled", () => {
+    installPrompt = null;
+    $("#installBtn").hidden = true;
+    toast("BLOOD FINDER installed. Open it from your home screen.");
+  });
+  function runInstall() {
+    if (!installPrompt) { location.hash = "#install"; return; }
+    installPrompt.prompt();
+    installPrompt.userChoice.finally(() => { installPrompt = null; $("#installBtn").hidden = true; render(); });
+  }
+  $("#installBtn").addEventListener("click", runInstall);
+  if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost") && !isNativeApp) {
+    navigator.serviceWorker.register("sw.js").catch(() => { /* offline mode unavailable */ });
+  }
+
+  views.install = () => {
+    if (isInstalled()) {
+      return `<div class="page-head"><div><h1>Install on phone</h1></div></div>
+        <div class="card"><h2>You're using the app</h2><p>BLOOD FINDER is installed on this device${isNativeApp ? " as an Android app" : ""}. It works without internet, and your changes are kept on this phone.</p></div>`;
+    }
+    return `
+      <div class="page-head"><div><h1>Install on phone</h1><p>Use BLOOD FINDER like a normal app: its own icon on the home screen, full screen, and it works without internet.</p></div></div>
+      ${installPrompt ? `<div class="card"><h2>Install now</h2><p>Your browser can install BLOOD FINDER straight away.</p><button class="btn primary" data-act="install">Install app</button></div>` : ""}
+      <div class="grid k2">
+        <div class="card"><h2>Android: Chrome</h2><ol class="steps">
+          <li>Open this site in <b>Chrome</b>.</li>
+          <li>Tap the <b>⋮</b> menu at the top right.</li>
+          <li>Tap <b>Add to Home screen</b> (or <b>Install app</b>), then <b>Install</b>.</li>
+          <li>Open <b>Blood Finder</b> from your home screen.</li></ol></div>
+        <div class="card"><h2>iPhone: Safari</h2><ol class="steps">
+          <li>Open this site in <b>Safari</b>.</li>
+          <li>Tap the <b>Share</b> button (square with an arrow).</li>
+          <li>Tap <b>Add to Home Screen</b>, then <b>Add</b>.</li>
+          <li>Open <b>Blood Finder</b> from your home screen.</li></ol></div>
+        <div class="card"><h2>Android: APK file</h2><p>A demo Android app you install from a file instead of the browser.</p><ol class="steps">
+          <li>On your Android phone, <a href="${APK_URL}">download blood-finder.apk</a>.</li>
+          <li>Open the downloaded file. If Android asks, allow <b>Install unknown apps</b> for your browser or file manager.</li>
+          <li>Tap <b>Install</b>. If Play Protect warns that the app is unrecognised, tap <b>More details → Install anyway</b>. This happens because the demo is not on the Play Store.</li></ol></div>
+      </div>`;
+  };
+
   /* ---------- actions ---------- */
   const actions = {
+    install() { runInstall(); },
     propose(btn) {
       const d = donor(btn.dataset.id);
       const open = db.Blood_Request.filter(r => (r.request_status === "Pending" || r.request_status === "Partially fulfilled") &&

@@ -167,3 +167,12 @@ dialog form { padding: 18px 20px; }
 }
 
 [hidden] { display: none !important; }
+
+/* installed app */
+.install-btn { margin-left: auto; margin-right: 10px; background: #fff; color: var(--red-dark); border: none; border-radius: 6px; padding: 6px 12px; font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; }
+.steps { margin: 0; padding-left: 1.2rem; }
+.steps li { margin-bottom: 6px; }
+@media (display-mode: standalone) {
+  .topbar { padding-top: env(safe-area-inset-top); height: calc(58px + env(safe-area-inset-top)); }
+  .sidenav { top: calc(58px + env(safe-area-inset-top)); }
+}
